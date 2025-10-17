@@ -40,7 +40,12 @@ with app.app_context():
     
     if User.query.count() == 0:
         admin_password = bcrypt.generate_password_hash('admin123').decode('utf-8')
-        admin_user = User(username='admin', email='admin@gpstracker.local', password_hash=admin_password)
+        admin_user = User(
+            username='admin', 
+            email='admin@gpstracker.local', 
+            password_hash=admin_password,
+            role='admin'
+        )
         db.session.add(admin_user)
         db.session.commit()
         print("Created default admin user (username: admin, password: admin123)")
@@ -60,7 +65,12 @@ def register():
         return jsonify({'error': 'Email already exists'}), 400
     
     hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
-    user = User(username=data['username'], email=data['email'], password_hash=hashed_password)
+    user = User(
+        username=data['username'], 
+        email=data['email'], 
+        password_hash=hashed_password,
+        role=data.get('role', 'viewer')
+    )
     
     db.session.add(user)
     db.session.commit()
@@ -76,7 +86,12 @@ def login():
         login_user(user, remember=True)
         return jsonify({
             'message': 'Login successful',
-            'user': {'id': user.id, 'username': user.username, 'email': user.email}
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': user.role
+            }
         })
     
     return jsonify({'error': 'Invalid username or password'}), 401
@@ -92,7 +107,12 @@ def check_auth():
     if current_user.is_authenticated:
         return jsonify({
             'authenticated': True,
-            'user': {'id': current_user.id, 'username': current_user.username, 'email': current_user.email}
+            'user': {
+                'id': current_user.id,
+                'username': current_user.username,
+                'email': current_user.email,
+                'role': current_user.role
+            }
         })
     return jsonify({'authenticated': False})
 
@@ -172,7 +192,8 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 @app.route('/api/vehicles', methods=['GET'])
 @login_required
 def get_vehicles():
-    vehicles = Vehicle.query.filter_by(is_active=True).all()
+    # Return ALL vehicles (both active and inactive)
+    vehicles = Vehicle.query.all()
     return jsonify([{
         'id': v.id,
         'name': v.name,
@@ -342,6 +363,259 @@ def get_vehicle_stats(vehicle_id):
         'distance_km': round(total_distance, 2),
         'time_period_hours': hours
     })
+
+# ============= USER MANAGEMENT =============
+
+@app.route('/api/users', methods=['GET'])
+@login_required
+def get_users():
+    users = User.query.all()
+    return jsonify([{
+        'id': u.id,
+        'username': u.username,
+        'email': u.email,
+        'is_active': u.is_active,
+        'role': u.role,
+        'created_at': u.created_at.isoformat()
+    } for u in users])
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+@login_required
+def update_user(user_id):
+    data = request.json
+    user = User.query.get(user_id)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    if 'username' in data:
+        existing = User.query.filter_by(username=data['username']).first()
+        if existing and existing.id != user_id:
+            return jsonify({'error': 'Username already exists'}), 400
+        user.username = data['username']
+    
+    if 'email' in data:
+        existing = User.query.filter_by(email=data['email']).first()
+        if existing and existing.id != user_id:
+            return jsonify({'error': 'Email already exists'}), 400
+        user.email = data['email']
+    
+    if 'password' in data and data['password']:
+        user.password_hash = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+    
+    if 'is_active' in data:
+        user.is_active = data['is_active']
+    
+    if 'role' in data:
+        user.role = data['role']
+    
+    db.session.commit()
+    return jsonify({'message': 'User updated successfully'})
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@login_required
+def delete_user(user_id):
+    if user_id == current_user.id:
+        return jsonify({'error': 'Cannot delete your own account'}), 400
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'message': 'User deleted successfully'})
+
+# ============= VEHICLE MANAGEMENT =============
+
+@app.route('/api/vehicles', methods=['POST'])
+@login_required
+def create_vehicle():
+    data = request.json
+    
+    existing = Vehicle.query.filter_by(device_id=data['device_id']).first()
+    if existing:
+        return jsonify({'error': 'Device ID already exists'}), 400
+    
+    vehicle = Vehicle(
+        name=data['name'],
+        device_id=data['device_id'],
+        is_active=data.get('is_active', True)
+    )
+    
+    db.session.add(vehicle)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Vehicle created successfully',
+        'vehicle': {
+            'id': vehicle.id,
+            'name': vehicle.name,
+            'device_id': vehicle.device_id,
+            'is_active': vehicle.is_active
+        }
+    }), 201
+
+@app.route('/api/vehicles/<int:vehicle_id>', methods=['PUT'])
+@login_required
+def update_vehicle(vehicle_id):
+    data = request.json
+    vehicle = Vehicle.query.get(vehicle_id)
+    
+    if not vehicle:
+        return jsonify({'error': 'Vehicle not found'}), 404
+    
+    if 'name' in data:
+        vehicle.name = data['name']
+    
+    if 'device_id' in data:
+        existing = Vehicle.query.filter_by(device_id=data['device_id']).first()
+        if existing and existing.id != vehicle_id:
+            return jsonify({'error': 'Device ID already exists'}), 400
+        vehicle.device_id = data['device_id']
+    
+    if 'is_active' in data:
+        vehicle.is_active = data['is_active']
+    
+    db.session.commit()
+    return jsonify({'message': 'Vehicle updated successfully'})
+
+@app.route('/api/vehicles/<int:vehicle_id>', methods=['DELETE'])
+@login_required
+def delete_vehicle(vehicle_id):
+    vehicle = Vehicle.query.get(vehicle_id)
+    
+    if not vehicle:
+        return jsonify({'error': 'Vehicle not found'}), 404
+    
+    db.session.delete(vehicle)
+    db.session.commit()
+    return jsonify({'message': 'Vehicle deleted successfully'})
+
+# ============= PLACES OF INTEREST =============
+
+@app.route('/api/places-of-interest', methods=['GET'])
+@login_required
+def get_places_of_interest():
+    from app.models import PlaceOfInterest
+    places = PlaceOfInterest.query.order_by(PlaceOfInterest.created_at.desc()).all()
+    
+    return jsonify([{
+        'id': p.id,
+        'name': p.name,
+        'address': p.address,
+        'latitude': p.latitude,
+        'longitude': p.longitude,
+        'category': p.category,
+        'description': p.description,
+        'created_at': p.created_at.isoformat(),
+        'created_by': p.creator.username if p.creator else None
+    } for p in places])
+
+@app.route('/api/places-of-interest', methods=['POST'])
+@login_required
+def create_place_of_interest():
+    from app.models import PlaceOfInterest
+    data = request.json
+    
+    place = PlaceOfInterest(
+        name=data['name'],
+        address=data.get('address', ''),
+        latitude=float(data['latitude']),
+        longitude=float(data['longitude']),
+        category=data.get('category', 'General'),
+        description=data.get('description', ''),
+        created_by=current_user.id
+    )
+    
+    db.session.add(place)
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Place of interest created successfully',
+        'place': {
+            'id': place.id,
+            'name': place.name,
+            'latitude': place.latitude,
+            'longitude': place.longitude
+        }
+    }), 201
+
+@app.route('/api/places-of-interest/<int:place_id>', methods=['PUT'])
+@login_required
+def update_place_of_interest(place_id):
+    from app.models import PlaceOfInterest
+    place = PlaceOfInterest.query.get(place_id)
+    
+    if not place:
+        return jsonify({'error': 'Place not found'}), 404
+    
+    data = request.json
+    
+    if 'name' in data:
+        place.name = data['name']
+    if 'address' in data:
+        place.address = data['address']
+    if 'latitude' in data:
+        place.latitude = float(data['latitude'])
+    if 'longitude' in data:
+        place.longitude = float(data['longitude'])
+    if 'category' in data:
+        place.category = data['category']
+    if 'description' in data:
+        place.description = data['description']
+    
+    db.session.commit()
+    return jsonify({'message': 'Place updated successfully'})
+
+@app.route('/api/places-of-interest/<int:place_id>', methods=['DELETE'])
+@login_required
+def delete_place_of_interest(place_id):
+    from app.models import PlaceOfInterest
+    place = PlaceOfInterest.query.get(place_id)
+    
+    if not place:
+        return jsonify({'error': 'Place not found'}), 404
+    
+    db.session.delete(place)
+    db.session.commit()
+    return jsonify({'message': 'Place deleted successfully'})
+
+@app.route('/api/geocode', methods=['GET'])
+@login_required
+def geocode_address():
+    """Geocode address using Nominatim (OpenStreetMap)"""
+    address = request.args.get('address', '')
+    
+    if not address:
+        return jsonify({'error': 'Address parameter required'}), 400
+    
+    import urllib.parse
+    import urllib.request
+    import json
+    
+    try:
+        encoded_address = urllib.parse.quote(address)
+        url = f'https://nominatim.openstreetmap.org/search?q={encoded_address}&format=json&limit=5'
+        
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'GPS-Tracker-App/1.0')
+        
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode())
+            
+        results = [{
+            'name': item.get('display_name', ''),
+            'latitude': float(item.get('lat', 0)),
+            'longitude': float(item.get('lon', 0)),
+            'type': item.get('type', ''),
+            'importance': item.get('importance', 0)
+        } for item in data]
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')

@@ -12,6 +12,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
+    role = db.Column(db.String(20), default='viewer')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Vehicle(db.Model):
@@ -48,3 +49,18 @@ class SavedLocation(db.Model):
     visit_type = db.Column(db.String(50))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     notes = db.Column(db.Text)
+
+class PlaceOfInterest(db.Model):
+    __tablename__ = 'places_of_interest'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    address = db.Column(db.String(500))
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    category = db.Column(db.String(100))
+    description = db.Column(db.Text)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    creator = db.relationship('User', backref=db.backref('created_places', lazy=True))

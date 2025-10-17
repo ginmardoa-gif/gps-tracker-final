@@ -3,16 +3,24 @@ import Map from './components/Map';
 import VehicleList from './components/VehicleList';
 import VehicleHistory from './components/VehicleHistory';
 import VehicleStats from './components/VehicleStats';
+import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
+
+// Role permissions checker
+const canAccessAdmin = (userRole) => {
+  return ['admin', 'manager'].includes(userRole);
+};
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState('tracking');
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [vehicleHistory, setVehicleHistory] = useState([]);
   const [savedLocations, setSavedLocations] = useState([]);
+  const [placesOfInterest, setPlacesOfInterest] = useState([]);
   const [historyHours, setHistoryHours] = useState(24);
 
   useEffect(() => {
@@ -52,6 +60,7 @@ function App() {
       setCurrentUser(null);
       setVehicles([]);
       setSelectedVehicle(null);
+      setActiveView('tracking');
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -113,13 +122,30 @@ function App() {
     }
   };
 
+  const fetchPlacesOfInterest = async () => {
+    try {
+      const response = await fetch('/api/places-of-interest', {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      setPlacesOfInterest(data);
+    } catch (error) {
+      console.error('Error fetching places of interest:', error);
+      setPlacesOfInterest([]);
+    }
+  };
+
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && activeView === 'tracking') {
       fetchVehicles();
-      const interval = setInterval(fetchVehicles, 5000);
+      fetchPlacesOfInterest();
+      const interval = setInterval(() => {
+        fetchVehicles();
+        fetchPlacesOfInterest();
+      }, 5000);
       return () => clearInterval(interval);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, activeView]);
 
   useEffect(() => {
     if (selectedVehicle && isAuthenticated) {
@@ -166,9 +192,33 @@ function App() {
             <p className="text-sm text-blue-100">Real-time vehicle tracking and location history</p>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setActiveView('tracking')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeView === 'tracking'
+                  ? 'bg-white text-blue-600'
+                  : 'bg-blue-700 text-white hover:bg-blue-800'
+              }`}
+            >
+              Tracking
+            </button>
+            {canAccessAdmin(currentUser?.role) && (
+              <button
+                onClick={() => setActiveView('admin')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  activeView === 'admin'
+                    ? 'bg-white text-blue-600'
+                    : 'bg-blue-700 text-white hover:bg-blue-800'
+                }`}
+              >
+                Admin
+              </button>
+            )}
             <div className="text-right">
               <div className="text-sm font-medium">{currentUser?.username}</div>
-              <div className="text-xs text-blue-200">{currentUser?.email}</div>
+              <div className="text-xs text-blue-200">
+                {currentUser?.email} • {currentUser?.role}
+              </div>
             </div>
             <button
               onClick={handleLogout}
@@ -180,54 +230,74 @@ function App() {
         </div>
       </header>
       
-      <div className="flex-1 flex gap-4 p-4 overflow-hidden">
-        <aside className="w-80 flex flex-col gap-4 overflow-y-auto">
-          <VehicleList
-            vehicles={vehicles}
-            selectedVehicle={selectedVehicle}
-            onSelectVehicle={handleSelectVehicle}
-          />
+      {activeView === 'tracking' ? (
+        <div className="flex-1 flex gap-4 p-4 overflow-hidden">
+          <aside className="w-80 flex flex-col gap-4 overflow-y-auto">
+            <VehicleList
+              vehicles={vehicles}
+              selectedVehicle={selectedVehicle}
+              onSelectVehicle={handleSelectVehicle}
+            />
+            
+            {selectedVehicle && (
+              <>
+                <div className="bg-white rounded-lg shadow p-4">
+                  <label className="block text-sm font-medium mb-2">History Duration</label>
+                  <select
+                    value={historyHours}
+                    onChange={(e) => setHistoryHours(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value={1}>Last 1 hour</option>
+                    <option value={6}>Last 6 hours</option>
+                    <option value={24}>Last 24 hours</option>
+                    <option value={72}>Last 3 days</option>
+                    <option value={168}>Last 7 days</option>
+                  </select>
+                </div>
+                
+                <VehicleHistory
+                  savedLocations={savedLocations}
+                  onRefresh={() => fetchSavedLocations(selectedVehicle.id)}
+                  vehicleId={selectedVehicle.id}
+                />
+                
+                <VehicleStats
+                  vehicleId={selectedVehicle.id}
+                  historyHours={historyHours}
+                />
+              </>
+            )}
+          </aside>
           
-          {selectedVehicle && (
-            <>
-              <div className="bg-white rounded-lg shadow p-4">
-                <label className="block text-sm font-medium mb-2">History Duration</label>
-                <select
-                  value={historyHours}
-                  onChange={(e) => setHistoryHours(Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value={1}>Last 1 hour</option>
-                  <option value={6}>Last 6 hours</option>
-                  <option value={24}>Last 24 hours</option>
-                  <option value={72}>Last 3 days</option>
-                  <option value={168}>Last 7 days</option>
-                </select>
-              </div>
-              
-              <VehicleHistory
-                savedLocations={savedLocations}
-                onRefresh={() => fetchSavedLocations(selectedVehicle.id)}
-                vehicleId={selectedVehicle.id}
-              />
-              
-              <VehicleStats
-                vehicleId={selectedVehicle.id}
-                historyHours={historyHours}
-              />
-            </>
-          )}
-        </aside>
-        
-        <main className="flex-1 bg-white rounded-lg shadow overflow-hidden">
-          <Map
-            vehicles={vehicles}
-            selectedVehicle={selectedVehicle}
-            vehicleHistory={vehicleHistory}
-            savedLocations={savedLocations}
-          />
-        </main>
-      </div>
+          <main className="flex-1 bg-white rounded-lg shadow overflow-hidden">
+            <Map
+              vehicles={vehicles}
+              selectedVehicle={selectedVehicle}
+              vehicleHistory={vehicleHistory}
+              savedLocations={savedLocations}
+              placesOfInterest={placesOfInterest}
+              onRefreshPOI={fetchPlacesOfInterest}
+              currentUserRole={currentUser?.role}
+            />
+          </main>
+        </div>
+      ) : (
+        canAccessAdmin(currentUser?.role) ? (
+          <div className="flex-1 overflow-hidden">
+            <AdminPanel />
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🔒</div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h2>
+              <p className="text-gray-600">You don't have permission to access admin panel.</p>
+              <p className="text-sm text-gray-500 mt-2">Your role: {currentUser?.role}</p>
+            </div>
+          </div>
+        )
+      )}
     </div>
   );
 }
