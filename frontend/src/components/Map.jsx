@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMapEvents } from 'react-leaflet';
+import React, { useEffect, useState, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -12,25 +12,56 @@ L.Icon.Default.mergeOptions({
 const vehicleColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
 
 function MapClickHandler({ onMapClick, pinMode }) {
-  useMapEvents({
-    click: (e) => {
+  useMap();
+  const map = useMap();
+  
+  useEffect(() => {
+    const handleClick = (e) => {
       if (pinMode) {
         onMapClick(e.latlng);
       }
-    },
-  });
+    };
+    
+    map.on('click', handleClick);
+    return () => {
+      map.off('click', handleClick);
+    };
+  }, [map, pinMode, onMapClick]);
+  
+  return null;
+}
+
+function MapController({ center, zoom }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (center) {
+      map.setView(center, zoom || map.getZoom());
+    }
+  }, [center, zoom, map]);
+  
   return null;
 }
 
 function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, placesOfInterest, onRefreshPOI, currentUserRole }) {
   const [center, setCenter] = useState([5.8520, -55.2038]);
+  const [zoom, setZoom] = useState(13);
   const [pinMode, setPinMode] = useState(false);
   const [tempPin, setTempPin] = useState(null);
+  
+  // Address search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [searchMarker, setSearchMarker] = useState(null);  // ADD THIS LINE
+  const searchTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (selectedVehicle && vehicleHistory.length > 0) {
       const lastLocation = vehicleHistory[vehicleHistory.length - 1];
       setCenter([lastLocation.latitude, lastLocation.longitude]);
+      setZoom(15);
     }
   }, [selectedVehicle, vehicleHistory]);
 
@@ -74,6 +105,57 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
     }
   };
 
+  const handleSearchInput = (value) => {
+    setSearchQuery(value);
+    
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    if (value.length < 3) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+    
+    setSearching(true);
+    searchTimeoutRef.current = setTimeout(() => {
+      searchAddress(value);
+    }, 500);
+  };
+
+  const searchAddress = async (query) => {
+    try {
+      const response = await fetch(`/api/geocode?address=${encodeURIComponent(query)}`, {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      setSearchResults(data);
+      setShowResults(true);
+    } catch (error) {
+      console.error('Error searching address:', error);
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectResult = (result) => {
+    setCenter([result.latitude, result.longitude]);
+    setZoom(16);
+    setSearchQuery(result.name);
+    setShowResults(false);
+    setSearchResults([]);
+    setSearchMarker({ lat: result.latitude, lng: result.longitude, name: result.name });  // ADD THIS LINE
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowResults(false);
+    setSearchMarker(null);  // ADD THIS LINE
+  };
+
   const createColoredIcon = (color) => {
     return L.divIcon({
       className: 'custom-div-icon',
@@ -103,13 +185,14 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
 
   return (
     <div className="relative h-full w-full">
-      <MapContainer center={center} zoom={13} className="h-full w-full">
+      <MapContainer center={center} zoom={zoom} className="h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         
         <MapClickHandler onMapClick={handleMapClick} pinMode={pinMode} />
+        <MapController center={center} zoom={zoom} />
         
         {!selectedVehicle && vehicles.map((vehicle, idx) => {
           if (!vehicle.lastLocation) return null;
@@ -214,8 +297,85 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
         {tempPin && (
           <Marker position={[tempPin.lat, tempPin.lng]} icon={createPOIIcon()} />
         )}
+	{searchMarker && (
+          <Marker position={[searchMarker.lat, searchMarker.lng]}>
+            <Popup>
+              <div className="text-sm">
+                <strong>📍 Search Result</strong><br />
+                {searchMarker.name}
+              </div>
+            </Popup>
+          </Marker>
+        )}
       </MapContainer>
 
+      {/* Address Search Bar */}
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] w-96">
+        <div className="bg-white rounded-lg shadow-lg">
+          <div className="flex items-center p-3 border-b">
+            <svg className="w-5 h-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchInput(e.target.value)}
+              onFocus={() => searchResults.length > 0 && setShowResults(true)}
+              placeholder="Search address..."
+              className="flex-1 outline-none text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={handleClearSearch}
+                className="ml-2 text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+            {searching && (
+              <div className="ml-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+              </div>
+            )}
+          </div>
+          
+          {showResults && searchResults.length > 0 && (
+            <div className="max-h-80 overflow-y-auto">
+              {searchResults.map((result, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => handleSelectResult(result)}
+                  className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                >
+                  <div className="flex items-start">
+                    <svg className="w-4 h-4 text-blue-500 mr-2 mt-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-gray-900">{result.name.split(',')[0]}</div>
+                      <div className="text-xs text-gray-500 mt-1">{result.name}</div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {result.latitude.toFixed(4)}, {result.longitude.toFixed(4)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {showResults && searchResults.length === 0 && !searching && searchQuery.length >= 3 && (
+            <div className="p-4 text-center text-sm text-gray-500">
+              No results found for "{searchQuery}"
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Pin Location Button */}
       {['admin', 'manager', 'operator'].includes(currentUserRole) && (
         <div className="absolute top-4 right-4 z-[1000]">
           <button
