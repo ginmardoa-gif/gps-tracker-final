@@ -111,6 +111,85 @@ UPDATE users SET password_hash = 'PASTE_HASH_HERE' WHERE username = 'admin';
 
 ---
 
+## Problem: User can't access Admin panel
+
+**Symptoms:**
+- User doesn't see "Admin" button
+- "Access Denied" when trying to access admin features
+
+**Solution:**
+
+**Check user role:**
+```bash
+docker compose exec backend python -c "
+from app.models import db, User
+from app.main import app
+with app.app_context():
+    username = input('Enter username: ')
+    user = User.query.filter_by(username=username).first()
+    if user:
+        print(f'Username: {user.username}')
+        print(f'Role: {user.role}')
+        print(f'Active: {user.is_active}')
+"
+```
+
+**Update user role:**
+```bash
+docker compose exec backend python -c "
+from app.models import db, User
+from app.main import app
+with app.app_context():
+    username = input('Enter username: ')
+    new_role = input('Enter new role (admin/manager/operator/viewer): ')
+    user = User.query.filter_by(username=username).first()
+    if user:
+        user.role = new_role
+        db.session.commit()
+        print(f'Updated {username} to role: {new_role}')
+"
+```
+
+**Role permissions:**
+- Admin panel access: `admin`, `manager`
+- User management: `admin` only
+- Vehicle/POI management: `admin`, `manager`
+- Pin locations: `admin`, `manager`, `operator`
+- View tracking: All roles
+
+---
+
+## Problem: Inactive vehicles not showing
+
+**Solution:**
+
+The inactive vehicles filter is working correctly. Check:
+
+1. Go to Admin → Vehicles
+2. Click **"Inactive (X)"** button at top
+3. Only inactive vehicles will show
+4. Click **"All (X)"** to see everything
+
+**Toggle vehicle status:**
+- Click on the status badge (Active/Inactive) to toggle
+
+---
+
+## Problem: Manager can see Users tab
+
+**This should NOT happen.** If it does:
+```bash
+# Restart frontend to reload permissions
+docker compose restart frontend
+
+# Clear browser cache
+# Ctrl + Shift + R (hard refresh)
+```
+
+Only admins should see the Users tab.
+
+---
+
 ## Emergency Reset
 
 **Complete reset (DELETES ALL DATA):**

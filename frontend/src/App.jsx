@@ -285,7 +285,7 @@ function App() {
       ) : (
         canAccessAdmin(currentUser?.role) ? (
           <div className="flex-1 overflow-hidden">
-            <AdminPanel />
+            <AdminPanel currentUserRole={currentUser?.role} />
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center">

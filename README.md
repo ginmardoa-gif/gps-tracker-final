@@ -17,11 +17,22 @@ docker compose up -d --build
 
 ## Useful Scripts
 ```bash
-./backup.sh              # Create backup
+./backup.sh              # Create complete backup
 ./restore.sh DATE        # Restore from backup
-./maintenance.sh         # System maintenance
+./maintenance.sh         # System maintenance & cleanup
 ./update.sh              # Update system
+./status.sh              # View system status
+./manage-user.sh         # User management helper
 ```
+
+### Script Descriptions
+
+- **backup.sh** - Creates timestamped backups of database and configuration
+- **restore.sh** - Restores system from a previous backup
+- **maintenance.sh** - Checks system health and cleans old data
+- **update.sh** - Updates containers to latest versions
+- **status.sh** - Shows detailed system status and statistics
+- **manage-user.sh** - Interactive user management (create, edit, delete users)
 
 ## Common Commands
 ```bash
@@ -33,15 +44,49 @@ docker compose down            # Stop all
 
 ## Features
 
-- ✅ Real-time GPS tracking
-- ✅ Web dashboard with maps
-- ✅ Mobile GPS sender (works in browser)
+### Core Tracking
+- ✅ Real-time GPS tracking with 10-second updates
+- ✅ Web dashboard with interactive maps
+- ✅ Mobile GPS sender (works in any browser)
 - ✅ Historical route playback
 - ✅ Auto-stop detection
 - ✅ Manual location saving
+
+### Vehicle Management
+- ✅ Multiple vehicle support
+- ✅ Active/Inactive vehicle filtering
+- ✅ Real-time location updates
+- ✅ Vehicle-specific history tracking
+- ✅ Statistics and analytics
+
+### Places of Interest (POI)
+- ✅ Save important locations
+- ✅ Address search with geocoding
+- ✅ Click-to-pin on map
+- ✅ Category organization
+- ✅ Visual markers on map
+
+### User Management & Security
+- ✅ Role-based access control (Admin, Manager, Operator, Viewer)
 - ✅ User authentication
-- ✅ Statistics & data export
+- ✅ Permission-based features
 - ✅ HTTPS security
+- ✅ Session management
+
+### Data & Export
+- ✅ Statistics & analytics
+- ✅ CSV export functionality
+- ✅ Historical data retention
+- ✅ Automated backups
+
+## User Roles
+
+| Role | Description | Use Case |
+|------|-------------|----------|
+| **Admin** | Full system access | IT staff, system administrators |
+| **Manager** | Manage vehicles & POI | Fleet managers, supervisors |
+| **Operator** | Track & pin locations | Dispatchers, operations team |
+| **Viewer** | Read-only access | Clients, stakeholders |
 
 ## Support
 

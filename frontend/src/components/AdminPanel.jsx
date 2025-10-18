@@ -1,22 +1,31 @@
 import React, { useState, useEffect } from 'react';
 
-function AdminPanel() {
+function AdminPanel({ currentUserRole }) {
   const [activeTab, setActiveTab] = useState('users');
+  
+  // If not admin, default to vehicles tab
+  useEffect(() => {
+    if (currentUserRole !== 'admin' && activeTab === 'users') {
+      setActiveTab('vehicles');
+    }
+  }, [currentUserRole]);
   
   return (
     <div className="h-full flex flex-col bg-gray-100">
       <div className="bg-white shadow">
         <div className="flex border-b">
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-6 py-3 font-medium ${
-              activeTab === 'users'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            Users
-          </button>
+          {currentUserRole === 'admin' && (
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`px-6 py-3 font-medium ${
+                activeTab === 'users'
+                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Users
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('vehicles')}
             className={`px-6 py-3 font-medium ${
@@ -41,7 +50,7 @@ function AdminPanel() {
       </div>
       
       <div className="flex-1 overflow-auto p-6">
-        {activeTab === 'users' && <UserManagement />}
+        {activeTab === 'users' && currentUserRole === 'admin' && <UserManagement />}
         {activeTab === 'vehicles' && <VehicleManagement />}
         {activeTab === 'poi' && <POIManagement />}
       </div>

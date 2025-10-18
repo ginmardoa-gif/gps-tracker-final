@@ -382,6 +382,81 @@ curl -k https://192.168.100.222:5443/api/health
 - View statistics
 - Export data (CSV/JSON)
 
+## User Roles and Permissions
+
+The system implements role-based access control with four distinct user roles:
+
+### Role Hierarchy
+
+| Role | Access Level | Description |
+|------|-------------|-------------|
+| **Admin** | Full Access | Complete system control including user management |
+| **Manager** | Management | Can manage vehicles, places of interest, and view tracking |
+| **Operator** | Operational | Can view tracking and pin locations on map |
+| **Viewer** | Read-Only | Can only view tracking data |
+
+### Detailed Permissions Matrix
+
+| Feature | Viewer | Operator | Manager | Admin |
+|---------|--------|----------|---------|-------|
+| **Tracking & Viewing** |
+| View live tracking | ✅ | ✅ | ✅ | ✅ |
+| View vehicle history | ✅ | ✅ | ✅ | ✅ |
+| View saved locations | ✅ | ✅ | ✅ | ✅ |
+| View places of interest | ✅ | ✅ | ✅ | ✅ |
+| Export data | ✅ | ✅ | ✅ | ✅ |
+| **Location Management** |
+| Pin locations on map | ❌ | ✅ | ✅ | ✅ |
+| Save manual locations | ❌ | ✅ | ✅ | ✅ |
+| **Admin Panel Access** |
+| Access admin panel | ❌ | ❌ | ✅ | ✅ |
+| **User Management** |
+| View users | ❌ | ❌ | ❌ | ✅ |
+| Add users | ❌ | ❌ | ❌ | ✅ |
+| Edit users | ❌ | ❌ | ❌ | ✅ |
+| Delete users | ❌ | ❌ | ❌ | ✅ |
+| Assign roles | ❌ | ❌ | ❌ | ✅ |
+| **Vehicle Management** |
+| View vehicles | ✅ | ✅ | ✅ | ✅ |
+| Add vehicles | ❌ | ❌ | ✅ | ✅ |
+| Edit vehicles | ❌ | ❌ | ✅ | ✅ |
+| Delete vehicles | ❌ | ❌ | ✅ | ✅ |
+| Toggle active/inactive | ❌ | ❌ | ✅ | ✅ |
+| **Places of Interest** |
+| View POI | ✅ | ✅ | ✅ | ✅ |
+| Add POI | ❌ | ❌ | ✅ | ✅ |
+| Edit POI | ❌ | ❌ | ✅ | ✅ |
+| Delete POI | ❌ | ❌ | ✅ | ✅ |
+| Search addresses | ❌ | ❌ | ✅ | ✅ |
+
+### Default User
+
+On first installation, a default admin user is created:
+- **Username:** admin
+- **Password:** admin123
+- **Role:** admin
+- **Email:** admin@gpstracker.local
+
+⚠️ **IMPORTANT:** Change the default admin password immediately after first login!
+
+### Creating Additional Users
+
+Only administrators can create and manage users:
+
+1. Login as admin
+2. Click "Admin" button
+3. Go to "Users" tab
+4. Click "Add User"
+5. Fill in details and select appropriate role
+6. Click "Add"
+
+### Best Practices
+
+- **Viewer Role:** Use for clients or stakeholders who only need to monitor
+- **Operator Role:** Use for dispatchers or operations staff who track and mark locations
+- **Manager Role:** Use for supervisors who manage fleet and locations but shouldn't access user accounts
+- **Admin Role:** Limit to IT staff and senior management only
+
 ### Mobile GPS Sender (Smartphone)
 
 **URL:** `https://192.168.100.222:8443`
@@ -493,6 +568,561 @@ CSV includes:
 - Latitude
 - Longitude
 - Speed
+
+---
+
+## Management Scripts Usage
+
+The system includes several helper scripts for common administrative tasks.
+
+### System Status Check
+
+View complete system health and statistics:
+```bash
+cd ~/gps-tracker-final
+./status.sh
+```
+
+**Output includes:**
+- Container status
+- User counts by role
+- Vehicle statistics (total/active/inactive)
+- Location data counts
+- Database size
+- Recent activity (24 hours)
+- Latest vehicle positions
+- Disk usage
+- Memory usage
+
+**Run this daily to monitor system health.**
+
+---
+
+### Backup System
+
+Create complete backup of database and configuration:
+```bash
+cd ~/gps-tracker-final
+./backup.sh
+```
+
+**What gets backed up:**
+- Complete database (all users, vehicles, locations, POI)
+- Configuration files (.env, docker-compose.yml)
+- SSL certificates
+- Application code
+
+**Backup location:** `~/gps-tracker-backups/`
+
+**Retention:** Automatically deletes backups older than 30 days
+
+**Recommended schedule:**
+- Daily: Automated via cron
+- Before updates: Manual backup
+- Before major changes: Manual backup
+
+**Setup automated daily backups:**
+```bash
+# Add to crontab
+crontab -e
+
+# Add this line (runs daily at 2 AM):
+0 2 * * * cd ~/gps-tracker-final && ./backup.sh >> ~/backup.log 2>&1
+```
+
+---
+
+### Restore from Backup
+
+Restore system from a previous backup:
+```bash
+cd ~/gps-tracker-final
+./restore.sh
+```
+
+**The script will:**
+1. Show available backup dates
+2. Ask you to choose one
+3. Confirm before restoring
+4. Stop services
+5. Restore database
+6. Restore configuration (if available)
+7. Restart services
+
+**Example:**
+```bash
+./restore.sh
+
+# Output:
+# Available backups:
+# 20251017_140530
+# 20251016_020000
+# 20251015_020000
+
+./restore.sh 20251017_140530
+```
+
+**⚠️ WARNING:** Restore will overwrite current data!
+
+---
+
+### System Maintenance
+
+Run system health checks and cleanup:
+```bash
+cd ~/gps-tracker-final
+./maintenance.sh
+```
+
+**What it checks:**
+- Disk space
+- Container status
+- Database size
+- Record counts
+- Recent errors in logs
+- Memory usage
+
+**Cleanup option:**
+- Deletes location data older than 30 days
+- Keeps saved locations and POI
+- Frees up database space
+
+**Run monthly for optimal performance.**
+
+---
+
+### User Management
+
+Interactive user management from command line:
+```bash
+cd ~/gps-tracker-final
+./manage-user.sh
+```
+
+**Available options:**
+
+**1. List all users**
+```bash
+# Shows: ID, Username, Email, Role, Active status, Created date
+```
+
+**2. Create new user**
+```bash
+# Prompts for:
+# - Username
+# - Email
+# - Password
+# - Role (admin/manager/operator/viewer)
+```
+
+**3. Change user role**
+```bash
+# Useful for promotions/demotions
+# Example: Promote operator to manager
+```
+
+**4. Reset user password**
+```bash
+# Securely updates password
+# Useful when users forget password
+```
+
+**5. Activate/Deactivate user**
+```bash
+# Disable without deleting
+# Can reactivate later
+```
+
+**6. Delete user**
+```bash
+# Permanently removes user
+# Requires typing 'DELETE' to confirm
+```
+
+**Examples:**
+
+**Create a new manager:**
+```bash
+./manage-user.sh
+# Select option 2
+# Username: john.doe
+# Email: john@company.com
+# Password: [hidden]
+# Role: manager
+```
+
+**Reset forgotten password:**
+```bash
+./manage-user.sh
+# Select option 4
+# Username: john.doe
+# New password: [hidden]
+```
+
+**Deactivate user (temporary suspension):**
+```bash
+./manage-user.sh
+# Select option 5
+# Username: john.doe
+# Activate? no
+```
+
+---
+
+### Update System
+
+Update containers to latest versions:
+```bash
+cd ~/gps-tracker-final
+./update.sh
+```
+
+**The script will:**
+1. Create automatic backup first
+2. Pull latest Docker images
+3. Rebuild containers
+4. Restart services
+5. Verify status
+
+**Use this when:**
+- Applying code updates
+- Updating dependencies
+- Upgrading Docker images
+
+---
+
+## Quick Reference - Common Tasks
+
+### Daily Operations
+
+**View system status:**
+```bash
+./status.sh
+```
+
+**Check recent activity:**
+```bash
+docker compose logs -f backend --tail 50
+```
+
+**View real-time location updates:**
+```bash
+docker compose logs -f backend | grep "POST /api/locations"
+```
+
+---
+
+### User Management Tasks
+
+**Add new viewer for client:**
+```bash
+./manage-user.sh
+# Option 2: Create user
+# Role: viewer
+```
+
+**Promote operator to manager:**
+```bash
+./manage-user.sh
+# Option 3: Change role
+# New role: manager
+```
+
+**List all users and roles:**
+```bash
+./manage-user.sh
+# Option 1: List users
+```
+
+---
+
+### Vehicle Management Tasks
+
+**Add vehicle (via dashboard):**
+1. Login as admin or manager
+2. Admin → Vehicles → Add Vehicle
+3. Enter name and device_id
+4. Submit
+
+**Deactivate vehicle temporarily:**
+1. Admin → Vehicles
+2. Click status badge (Active → Inactive)
+
+**View inactive vehicles:**
+1. Admin → Vehicles
+2. Click "Inactive (X)" filter
+
+---
+
+### Backup & Recovery Tasks
+
+**Before major changes:**
+```bash
+./backup.sh
+```
+
+**Weekly backup verification:**
+```bash
+ls -lh ~/gps-tracker-backups/
+```
+
+**Restore after problem:**
+```bash
+./restore.sh YYYYMMDD_HHMMSS
+```
+
+---
+
+### Monitoring Tasks
+
+**Check if services are running:**
+```bash
+docker compose ps
+```
+
+**View backend errors:**
+```bash
+docker compose logs backend --tail 100 | grep -i error
+```
+
+**Check database connections:**
+```bash
+docker compose exec db psql -U gpsadmin gps_tracker -c "SELECT count(*) FROM pg_stat_activity;"
+```
+
+**Monitor disk space:**
+```bash
+df -h /
+```
+
+---
+
+### Maintenance Tasks
+
+**Monthly cleanup:**
+```bash
+./maintenance.sh
+# Answer 'yes' to cleanup old data
+```
+
+**Check database size:**
+```bash
+docker compose exec db psql -U gpsadmin gps_tracker -c "SELECT pg_size_pretty(pg_database_size('gps_tracker'));"
+```
+
+**Restart all services:**
+```bash
+docker compose restart
+```
+
+**Full system restart:**
+```bash
+docker compose down
+docker compose up -d
+```
+
+---
+
+### Performance Optimization
+
+**Delete old GPS points (keeps saved locations):**
+```bash
+docker compose exec db psql -U gpsadmin gps_tracker -c "DELETE FROM locations WHERE timestamp < NOW() - INTERVAL '90 days';"
+```
+
+**Vacuum database (reclaim space):**
+```bash
+docker compose exec db psql -U gpsadmin gps_tracker -c "VACUUM FULL;"
+```
+
+**Rebuild database indexes:**
+```bash
+docker compose exec db psql -U gpsadmin gps_tracker -c "REINDEX DATABASE gps_tracker;"
+```
+
+---
+
+## Automated Maintenance Schedule
+
+### Recommended Cron Jobs
+```bash
+# Edit crontab
+crontab -e
+
+# Add these lines:
+
+# Daily backup at 2 AM
+0 2 * * * cd ~/gps-tracker-final && ./backup.sh >> ~/backup.log 2>&1
+
+# Weekly status check at 9 AM Monday
+0 9 * * 1 cd ~/gps-tracker-final && ./status.sh >> ~/status.log 2>&1
+
+# Monthly maintenance at 3 AM on 1st of month
+0 3 1 * * cd ~/gps-tracker-final && ./maintenance.sh >> ~/maintenance.log 2>&1
+
+# Weekly log rotation (keep last 30 days)
+0 4 * * 0 find ~/gps-tracker-final -name "*.log" -mtime +30 -delete
+```
+
+---
+
+## Security Best Practices
+
+### User Account Security
+
+**1. Change default admin password immediately:**
+```bash
+./manage-user.sh
+# Option 4: Reset password
+# Username: admin
+```
+
+**2. Create individual admin accounts:**
+- Don't share the default admin account
+- Create personal admin accounts for each administrator
+- Use the default admin only as backup
+
+**3. Use strong passwords:**
+- Minimum 12 characters
+- Mix of uppercase, lowercase, numbers, symbols
+- No dictionary words
+- Unique per user
+
+**4. Regular password rotation:**
+- Change admin passwords every 90 days
+- Update after staff changes
+- Reset if compromise suspected
+
+**5. Principle of least privilege:**
+- Viewer: For clients, stakeholders (read-only)
+- Operator: For dispatchers (tracking + pinning)
+- Manager: For supervisors (fleet management)
+- Admin: For IT staff only (full access)
+
+### System Security
+
+**1. SSL Certificate:**
+```bash
+# Generate new certificates annually
+cd ~/gps-tracker-final/ssl
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout key.pem -out cert.pem
+docker compose restart backend-proxy
+```
+
+**2. Firewall configuration:**
+```bash
+# Allow only necessary ports
+sudo ufw allow 22/tcp    # SSH
+sudo ufw allow 3000/tcp  # Dashboard
+sudo ufw allow 5443/tcp  # Backend API
+sudo ufw allow 8443/tcp  # Mobile sender
+sudo ufw enable
+```
+
+**3. Regular updates:**
+```bash
+# Update system packages monthly
+sudo apt update && sudo apt upgrade -y
+
+# Update GPS Tracker
+cd ~/gps-tracker-final
+./update.sh
+```
+
+**4. Monitor access logs:**
+```bash
+# Check for suspicious activity
+docker compose logs backend | grep "POST /api/auth/login"
+```
+
+**5. Backup security:**
+```bash
+# Protect backup files
+chmod 600 ~/gps-tracker-backups/*
+```
+
+### Network Security
+
+**1. Change default ports (optional):**
+
+Edit `docker-compose.yml`:
+```yaml
+frontend:
+  ports:
+    - "8080:80"  # Change from 3000 to 8080
+```
+
+**2. Restrict IP access (optional):**
+
+Use nginx to allow only specific IPs:
+```bash
+nano backend-proxy.conf
+# Add: allow 192.168.1.0/24; deny all;
+```
+
+**3. Use VPN for remote access:**
+- Set up WireGuard or OpenVPN
+- Access dashboard only through VPN
+- Don't expose to public internet
+
+---
+
+## Troubleshooting Common Issues
+
+### Scripts Not Working
+
+**Problem: Permission denied**
+```bash
+# Solution: Make scripts executable
+chmod +x ~/gps-tracker-final/*.sh
+```
+
+**Problem: Docker commands fail**
+```bash
+# Solution: Add user to docker group
+sudo usermod -aG docker $USER
+# Logout and login again
+```
+
+### Backup Issues
+
+**Problem: Backup fails with database error**
+```bash
+# Solution: Check if database is running
+docker compose ps
+docker compose restart db
+./backup.sh
+```
+
+**Problem: No space for backup**
+```bash
+# Solution: Clean old backups
+rm ~/gps-tracker-backups/database_2025*.sql
+# Or increase disk space
+```
+
+### User Management Issues
+
+**Problem: Can't create user - email exists**
+```bash
+# Solution: Check existing users
+./manage-user.sh
+# Option 1: List all users
+# Use different email
+```
+
+**Problem: User created but can't login**
+```bash
+# Solution: Check if user is active
+docker compose exec backend python -c "
+from app.models import User
+from app.main import app
+with app.app_context():
+    u = User.query.filter_by(username='USERNAME').first()
+    print(f'Active: {u.is_active}')
+"
+```
 
 ---
 
