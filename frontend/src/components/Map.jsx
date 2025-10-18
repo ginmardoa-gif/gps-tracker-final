@@ -149,6 +149,47 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
     setSearchMarker({ lat: result.latitude, lng: result.longitude, name: result.name });  // ADD THIS LINE
   };
 
+  const handleSaveSearchToPOI = async () => {
+    if (!searchMarker) return;
+    
+    const name = prompt('Enter a name for this place:', searchMarker.name.split(',')[0]);
+    if (!name) return;
+    
+    const category = prompt('Category (General/Customer/Warehouse/Office/Service/Parking/Fuel/Other):', 'General');
+    const description = prompt('Description (optional):');
+    
+    try {
+      const response = await fetch('/api/places-of-interest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: name,
+          address: searchMarker.name,
+          latitude: searchMarker.lat,
+          longitude: searchMarker.lng,
+          category: category || 'General',
+          description: description || `Saved from search: ${searchMarker.name}`
+        })
+      });
+      
+      if (response.ok) {
+        alert('Place saved successfully!');
+        setSearchMarker(null);
+        setSearchQuery('');
+        if (onRefreshPOI) {
+          onRefreshPOI();
+        }
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to save place');
+      }
+    } catch (error) {
+      console.error('Error saving place:', error);
+      alert('Error saving place');
+    }
+  };
+
   const handleClearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
@@ -303,6 +344,14 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
               <div className="text-sm">
                 <strong>📍 Search Result</strong><br />
                 {searchMarker.name}
+                <div className="mt-2 pt-2 border-t">
+                  <button
+                    onClick={handleSaveSearchToPOI}
+                    className="w-full px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs"
+                  >
+                    Save to Places of Interest
+                  </button>
+                </div>
               </div>
             </Popup>
           </Marker>
@@ -324,7 +373,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
               placeholder="Search address..."
               className="flex-1 outline-none text-sm"
             />
-            {searchQuery && (
+	    {searchQuery && (
               <button
                 onClick={handleClearSearch}
                 className="ml-2 text-gray-400 hover:text-gray-600"
@@ -332,6 +381,15 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
+              </button>
+            )}
+            {searchMarker && (
+              <button
+                onClick={handleSaveSearchToPOI}
+                className="ml-2 text-blue-600 hover:text-blue-800 text-xs font-medium"
+                title="Save to Places of Interest"
+              >
+                💾 Save
               </button>
             )}
             {searching && (
